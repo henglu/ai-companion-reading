@@ -1,0 +1,4 @@
+# Optional: only needed for text-layer PDF extraction.
+pypdf>=5,<7
+# EPUB, TXT, Markdown, BM25 and local learning records use Python 3.10+ stdlib.
+# Optional embeddings use an already-installed local Ollama server via HTTP.
