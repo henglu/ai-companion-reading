@@ -9,7 +9,7 @@ display_name_en: AI Deep Companion Reading
 version: "2.0.4"
 author: Fey
 tags: [读书, 伴读, 精读, 备考, 知识管理, 检索增强]
-description_zh: 针对本地书籍与教材的深度伴读。阅读模式解释概念、举反例、做跨章对照并用判断题与开放题检验理解；备考模式提供章节练习、客观题评分、错题回查与复习。BM25 开箱可用，可选自建 Ollama 的 bge-m3 增强召回。
+description_zh: 精读一本书，深学一门课，也能陪你把认证考试考下来。比起微信读书这类只能做书籍问答、摘录整理的技能，它直接读你本地的书稿和教材：拆概念、举反例、做跨章对照，再用判断题和开放题检验理解——答对但说不出理由，只算「还需澄清」。备考模式按教材和考试大纲出题：章节练习、客观题自动评分、错题回查，答错后用新情境题验证同一考点，真正理解才解除标记。装了 Ollama（bge-m3）就启用向量混合检索，换个说法也能精准命中原文；装不了本地模型或服务不可用，自动降级 BM25 关键词检索。支持 EPUB / TXT / Markdown / 文字层 PDF，索引与学习记录都留在本地。
 description_en: Deep companion reading for a local book or textbook. Reading mode explains concepts with counter-examples and cross-chapter links; exam mode adds chapter drills, objective scoring, mistake review and retests. BM25 works out of the box; optional bge-m3 vectors via a self-hosted Ollama.
 metadata:
   displayName: AI深度伴读
