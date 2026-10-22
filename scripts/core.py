@@ -6,7 +6,9 @@ import math
 import os
 import re
 import sqlite3
-import urllib.request
+import http.client
+import socket
+import ssl
 from contextlib import contextmanager
 from pathlib import Path
 from collections import Counter
@@ -20,23 +22,78 @@ OLLAMA = os.environ.get('AI_READING_OLLAMA') or DEFAULT_OLLAMA
 CGNAT = ipaddress.ip_network('100.64.0.0/10')
 
 
-def ollama_base(explicit=None):
-    """决定向量服务端点：显式参数 > 环境变量 > 本机默认。
+def allowed_address(value):
+    ip = ipaddress.ip_address(value.split('%')[0])
+    if ip.version == 6 and ip.ipv4_mapped:
+        ip = ip.ipv4_mapped
+    networks = ('127.0.0.0/8', '10.0.0.0/8', '172.16.0.0/12',
+                '192.168.0.0/16', '169.254.0.0/16', '100.64.0.0/10',
+                '::1/128', 'fc00::/7', 'fe80::/10')
+    return any(ip in ipaddress.ip_network(n) for n in networks)
 
-    只接受 http(s) 且落在本机、局域网或 Tailscale 网段的地址，
-    避免把书籍内容发到公网服务。
-    """
-    raw = ((explicit or '').strip() or (OLLAMA or DEFAULT_OLLAMA)).strip().rstrip('/')
+
+def resolve_endpoint(raw):
     parts = urlparse(raw)
-    if parts.scheme not in ('http', 'https') or not parts.hostname:
-        raise ValueError(f'向量服务地址无效：{raw}；应形如 http://127.0.0.1:11434')
+    if (parts.scheme not in ('http', 'https') or not parts.hostname
+            or parts.username is not None or parts.password is not None
+            or parts.query or parts.fragment or parts.path not in ('', '/')):
+        raise ValueError('向量地址应为 http(s)://主机:端口，不含账号、路径或查询参数')
     try:
-        ip = ipaddress.ip_address(parts.hostname)
-    except ValueError:
-        return raw  # 主机名交由系统解析，不做 DNS 探测
-    if not (ip.is_loopback or ip.is_private or ip.is_link_local or ip in CGNAT):
-        raise ValueError(f'只支持本机或局域网自建的 Ollama：{raw}；不向公网发送材料')
+        port = parts.port or (443 if parts.scheme == 'https' else 80)
+        addresses = socket.getaddrinfo(parts.hostname, port, type=socket.SOCK_STREAM)
+    except (OSError, ValueError) as exc:
+        raise ValueError('无法解析向量服务地址；请检查主机名、端口或使用内网 IP。BM25 仍可使用') from exc
+    if not addresses or any(not allowed_address(item[4][0]) for item in addresses):
+        raise ValueError('向量服务必须全部解析到本机、内网或 Tailscale 地址；已阻止发送材料')
+    return parts, addresses
+
+
+def ollama_base(explicit=None):
+    raw = ((explicit or '').strip() or (OLLAMA or DEFAULT_OLLAMA)).strip().rstrip('/')
+    resolve_endpoint(raw)
     return raw
+
+
+def embedding_response(endpoint, payload, timeout):
+    # Resolve once, validate every answer, and connect to that exact sockaddr.
+    # No proxies, redirects or a second DNS lookup can change the destination.
+    parts, addresses = resolve_endpoint(endpoint)
+    conn = http.client.HTTPConnection(parts.hostname, parts.port or
+                                      (443 if parts.scheme == 'https' else 80), timeout=timeout)
+    family, kind, proto, _, sockaddr = addresses[0]
+    sock = socket.socket(family, kind, proto)
+    try:
+        sock.settimeout(timeout)
+        sock.connect(sockaddr)
+        if parts.scheme == 'https':
+            sock = ssl.create_default_context().wrap_socket(sock, server_hostname=parts.hostname)
+        conn.sock = sock
+        conn.request('POST', '/api/embed', body=payload,
+                     headers={'Content-Type': 'application/json'})
+        response = conn.getresponse()
+        if 300 <= response.status < 400:
+            raise ValueError('向量服务返回重定向，已阻止跟随；请填写服务的直接内网地址')
+        if response.status == 404:
+            raise ValueError('未找到向量模型或 /api/embed 接口；请检查模型名称与 Ollama 版本')
+        if response.status != 200:
+            raise ValueError(f'向量服务返回 HTTP {response.status}；请检查服务状态，BM25 仍可使用')
+        raw = response.read(16 * 1024 * 1024 + 1)
+        if len(raw) > 16 * 1024 * 1024:
+            raise ValueError('向量响应过大；请减小批次或检查服务')
+        try:
+            data = json.loads(raw)
+        except (ValueError, UnicodeError) as exc:
+            raise ValueError('向量服务未返回有效 JSON；请确认地址指向 Ollama') from exc
+        if not isinstance(data, dict):
+            raise ValueError('向量响应格式错误：应为 JSON 对象')
+        return data
+    except (TimeoutError, socket.timeout) as exc:
+        raise ValueError('向量服务响应超时；请检查服务负载或连接，BM25 仍可使用') from exc
+    except (OSError, http.client.HTTPException) as exc:
+        raise ValueError('无法连接向量服务；请确认 Ollama 已启动、端口可达，BM25 仍可使用') from exc
+    finally:
+        conn.close()
+        sock.close()
 
 
 def fingerprint(path):
@@ -122,17 +179,15 @@ def bm25(query, rows):
 
 def embed(texts, model='bge-m3', timeout=30, base=None):
     endpoint = ollama_base(base)
-    req = urllib.request.Request(endpoint + '/api/embed', data=json.dumps(
-        {'model': model, 'input': texts, 'truncate': False}).encode(),
-        headers={'Content-Type': 'application/json'})
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        data = json.load(response)
+    data = embedding_response(endpoint, json.dumps({'model': model, 'input': texts, 'truncate': False}).encode(), timeout)
     vectors = data.get('embeddings', [])
-    if len(vectors) != len(texts):
+    if not isinstance(vectors, list) or len(vectors) != len(texts):
         raise ValueError('向量服务返回数量不符')
+    if any(not isinstance(v, list) for v in vectors):
+        raise ValueError('向量响应格式错误：每个向量必须为数组')
     dim = len(vectors[0]) if vectors else 0
     for v in vectors:
-        if not dim or len(v) != dim or any(not isinstance(x, (int,float)) or not math.isfinite(x) for x in v):
+        if not dim or len(v) != dim or any(type(x) not in (int,float) or not math.isfinite(x) for x in v):
             raise ValueError('向量无效')
         norm = math.sqrt(sum(x*x for x in v))
         if not norm:

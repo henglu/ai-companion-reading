@@ -80,13 +80,24 @@ def text_sections(path):
 
 def pdf_sections(path):
     try: from pypdf import PdfReader
-    except ImportError as exc: raise ValueError('读取 PDF 需要可选依赖：python3 -m pip install pypdf') from exc
-    reader=PdfReader(str(path)); sections=[]
-    for n,page in enumerate(reader.pages,1):
-        text=page.extract_text() or ''
+    except Exception as exc:
+        from check_environment import pdf_help
+        raise ValueError(pdf_help()) from exc
+    try:
+        reader=PdfReader(str(path))
+        if reader.is_encrypted and not reader.decrypt(''):
+            raise ValueError('PDF 已加密；请先使用有权限的工具解密，再重新导入')
+        pages=list(reader.pages)
+    except Exception as exc:
+        raise ValueError('PDF 无法读取或已加密；请确认阅读器能打开，并导出未加密的文字层 PDF') from exc
+    sections=[]
+    for n,page in enumerate(pages,1):
+        try: text=page.extract_text() or ''
+        except Exception as exc:
+            raise ValueError(f'PDF 第 {n} 页无法解析；请重新导出文件或先做 OCR') from exc
         if text.strip(): sections.append((f'PDF 第 {n} 页',f'PDF 物理页 {n}',text))
     if not sections: raise ValueError('PDF 未提取到文字；可能为扫描件，请先 OCR')
-    if len(sections)<len(reader.pages):
+    if len(sections)<len(pages):
         print('提示：部分 PDF 页没有文字，未纳入索引；不能据此声称覆盖整本材料。',file=sys.stderr)
     return sections
 
@@ -153,7 +164,11 @@ def main():
     p.add_argument('--title');p.add_argument('--author',default='');p.add_argument('--replace',action='store_true')
     a=p.parse_args()
     try: emit(build(a.source,a.output_db,a.title,a.author,a.replace))
-    except (ValueError,OSError,sqlite3.Error,zipfile.BadZipFile,KeyError,UnicodeError) as exc:
+    except zipfile.BadZipFile:
+        print('错误：EPUB 文件损坏或格式不正确；请用阅读器确认能否打开，或重新导出 EPUB/TXT/Markdown 后重试。',file=sys.stderr);return 1
+    except UnicodeError:
+        print('错误：文本编码不是有效的 UTF-8；请另存为 UTF-8 后重试，原文件未修改。',file=sys.stderr);return 1
+    except (ValueError,OSError,sqlite3.Error,KeyError) as exc:
         print(f'错误：{exc}',file=sys.stderr);return 1
     return 0
 if __name__=='__main__':sys.exit(main())

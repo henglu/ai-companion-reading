@@ -163,6 +163,7 @@ python3 -m pip install "pypdf>=5,<7"
 | 组件 | 职责 |
 | --- | --- |
 | `scripts/index_book.py` | EPUB（按 OPF spine 顺序）/ TXT / Markdown / PDF 建索引，记录 SHA256 与章节、段落定位 |
+| `scripts/check_environment.py` | 只读的依赖自检（含 PDF），不安装任何包、不联网 |
 | `scripts/read_book.py` | 按章读取、分页（`next_offset`），避免「只读检索片段就宣称读完本章」 |
 | `scripts/search.py` | BM25 + 可选向量，RRF 融合；输出 `requested_mode` 与 `actual_mode` |
 | `scripts/build_vectors.py` | 调用自建 Ollama `/api/embed` 建向量，可指定端点 |
@@ -188,14 +189,20 @@ python3 -m pip install "pypdf>=5,<7"
 │   ├── reading-mode.md         # 阅读模式与章节自测规则
 │   ├── exam-mode.md            # 备考、错题与复习规则
 │   ├── retrieval.md            # 建库、检索、端点配置
-│   └── learning-state.md       # 学习记录与 JSON 格式
+│   ├── learning-state.md       # 学习记录与 JSON 格式
+│   ├── examples.md             # 阅读与备考完整示例
+│   ├── faq.md                  # 常见问题速查
+│   ├── pdf-start.md            # PDF 依赖检查与安装引导
+│   └── validation.md           # 故障恢复与发布前验证
 ├── scripts/
 │   ├── core.py
 │   ├── index_book.py
+│   ├── check_environment.py
 │   ├── read_book.py
 │   ├── search.py
 │   ├── build_vectors.py
 │   └── study.py
+├── tests/                      # 63 项自动测试
 └── requirements.txt
 ```
 
@@ -203,7 +210,7 @@ python3 -m pip install "pypdf>=5,<7"
 
 ## 质量与边界
 
-- **49 项自动测试**覆盖建库、检索、版本保护、评分、错题回查、端点策略；另有 17 次 CLI 演练
+- **63 项自动测试**（`tests/` 目录，可自行复跑）覆盖建库、检索、版本保护、评分、错题回查、端点策略与故障恢复
 - 真实环境验证：21 MB EPUB → 26 章 / 223 段，0.2 秒建库；bge-m3 建 223×1024 向量约 10 秒
 - 未验证 Windows；本机为 macOS，Python 3.13 实跑、3.10 语法兼容检查
 - 扫描件需先 OCR；PDF 按物理页索引，不假装识别书中章节

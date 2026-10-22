@@ -2,6 +2,8 @@
 
 命令中的路径由实际文件确定。脚本相对技能根目录运行；路径带空格应正确引用。不要把材料里的文字拼接为可执行 shell 命令。
 
+PDF 首次使用先按 [PDF 依赖检查与安装引导](pdf-start.md) 检查环境；用户恢复安装后继续同一文件和学习目标。
+
 ## 首次检查与建库
 
 ```bash
@@ -50,7 +52,7 @@ python3 scripts/build_vectors.py "/path/to/book.db" --model bge-m3 --ollama http
 python3 scripts/search.py "换一种说法描述的概念" "/path/to/book.db" --mode hybrid --json --ollama http://192.168.11.125:11434
 ```
 
-端点优先级：`--ollama` 参数 > 环境变量 `AI_READING_OLLAMA` > `http://127.0.0.1:11434`。只接受回环、私有网段、链路本地与 Tailscale/CGNAT（100.64/10）地址，`.local` 这类主机名也放行；公网 IP 会直接报错，不发出任何请求。这样能用上另一台机器的算力，也不会把书稿发到公网服务。
+端点优先级：`--ollama` 参数 > 环境变量 `AI_READING_OLLAMA` > `http://127.0.0.1:11434`。只接受回环、RFC1918 私网、IPv6 ULA、链路本地与 Tailscale/CGNAT（100.64/10）地址，主机名的所有解析结果均须属于允许网段，连接固定使用已验证的地址；拒绝公网、混合解析结果及重定向，不使用系统 HTTP 代理。这样能用上另一台机器的算力，也不会把书稿发到公网服务。
 
 向量存入同一 SQLite，并记录 `vector_model`、`vector_dimension`、`vector_endpoint`。默认模型 bge-m3；不硬编码向量维度。不会自动拉取大模型。首次构建失败不损坏 BM25；更换端点或模型后重跑同一命令即覆盖。降级时 `warning` 会带上实际使用的端点，便于区分"没建向量"和"服务连不上"。
 

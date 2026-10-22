@@ -6,7 +6,7 @@ slug: ai-companion-reading-pub
 displayName: AI深度伴读
 display_name: AI深度伴读
 display_name_en: AI Deep Companion Reading
-version: "2.0.2"
+version: "2.0.4"
 author: Fey
 tags: [读书, 伴读, 精读, 备考, 知识管理, 检索增强]
 description_zh: 针对本地书籍与教材的深度伴读。阅读模式解释概念、举反例、做跨章对照并用判断题与开放题检验理解；备考模式提供章节练习、客观题评分、错题回查与复习。BM25 开箱可用，可选自建 Ollama 的 bge-m3 增强召回。
@@ -14,7 +14,9 @@ description_en: Deep companion reading for a local book or textbook. Reading mod
 metadata:
   displayName: AI深度伴读
   slug: ai-companion-reading-pub
-  version: "2.0.2"
+  version: "2.0.4"
+  author: Fey
+  tags: [读书, 伴读, 精读, 备考, 知识管理, 检索增强]
 ---
 
 # AI深度伴读 2.0
@@ -46,7 +48,7 @@ metadata:
 
 ## 从材料开始
 
-1. 确认当前主书籍/教材文件，建立或复用索引。先用标准库 BM25 跑通；向量是用户可选增强，不先要求安装模型。
+1. 确认当前主书籍/教材文件。PDF 首次导入先运行 `scripts/check_environment.py --pdf`；组件不可用时按 [PDF 首次使用](references/pdf-start.md) 引导，验证就绪后重试同一文件，不要求用户重新描述目标。建立或复用索引。先用标准库 BM25 跑通；向量是用户可选增强，不先要求安装模型。
 2. 用 `read_book.py --chapters` 查看真实结构，再读取指定章节。返回 `next_offset` 时继续分页，不能只读检索命中的几段就声称“本章已读完”。PDF 默认按物理页索引，先与用户确认本章页段，不伪称已识别书中章节。
 3. 问具体问题时用 `search.py`；使用结果中的 `chapter`、`locator`、`chunk_id` 回到原文。检索分数不是事实置信度。必要时读取相邻段，确认限定条件。**短专有名词（如“FDE 是什么”“XX 模式”）BM25 容易跑偏：先用 `--chapter` 定位目标章节，再在章内检索或直接读该章。**
 4. 用通俗语言解释，分清原文、解释与延伸。回复以用户需要为准，简短问题简短回答；不以固定 500 字截断必要推理。
@@ -70,3 +72,9 @@ metadata:
 - 阅读、出题和开放题评价由宿主 AI 执行。**本地索引不等于整段对话完全离线**：宿主可能把检索到的片段发给其配置的模型服务，遵循用户材料与平台使用要求。
 - 不读取或同步用户的其他笔记软件；用户主动要求导出学习记录时再处理。
 - 运行完成以脚本返回成功为准；未保存、未建向量、未检索到、未实测的平台兼容性都如实说明。
+
+## 验证与故障排查
+
+遇到文件或向量服务错误时，按 [故障恢复与验证](references/validation.md) 处理；维护或发布前运行其中的测试。不要把模拟服务测试称为真实模型测试。
+
+新用户需要了解使用效果时，展示 [阅读与备考完整示例](references/examples.md) 对应模式；遇到常见问题先查 [常见问题速查](references/faq.md)，不要把内部异常或整段堆栈直接当用户答复。
